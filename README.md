@@ -1,14 +1,12 @@
-The idea here is to store previously trained models and provide the basic structure for training and testing environments.
+>The idea here is to store previously trained models and provide the basic structure for training and testing environments.
 
-Your local test/train directories can remain messy, but when you add your trained models and data here, make sure it remains organised.
-
-
-
-Directories:
+>Your local test/train directories can remain messy, but when you add your trained models and data here, make sure it remains organised.
 
 
+## Directories:
 
-IMAGESETS
+
+### IMAGESETS
 
   -Contains full imagesets with labels
   
@@ -16,7 +14,7 @@ IMAGESETS
 
 
 
-RESULTS
+### RESULTS
 
   -Interesting results of previous test runs
   
@@ -24,25 +22,25 @@ RESULTS
 
 
 
-TEST
+### TEST
 
   -Contains the basic structure you need for testing/running a model
   
-  -Copy the contents in a local directory and run testing there!
+  -*Copy* the contents in a local directory and run testing there!
 
 
 
-TRAIN
+### TRAIN
 
   -Contains the basic structure for training a model
   
-  -Copy the contents in a local directory and train there!
+  -*Copy* the contents in a local directory and train there!
   
-  -Do not add any training data here
+  -**Do not add any training data here**
 
 
 
-TRAINED_MODELS
+### TRAINED_MODELS
 
   -Store previously trained models here
   
