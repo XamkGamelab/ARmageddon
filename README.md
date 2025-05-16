@@ -25,6 +25,10 @@
 ### TEST
 
   -Contains the basic structure you need for testing/running a model
+
+  -testvideos folder contains videos that can be used to test the models
+
+  -If you want to test on an imageset, you can copy images from TRAINED_MODELS/[modelname]/data/ or IMAGESETS
   
   -*Copy* the contents in a local directory and run testing there!
 
