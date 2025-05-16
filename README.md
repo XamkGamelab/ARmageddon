@@ -43,6 +43,8 @@
   
   -**Do not add any training data here**
 
+  -The data folder here is just an example to show what the data structure should look like. You will replace it in your ***LOCAL*** train directory.
+
   -train_val_split script splits your training data into train and validation folders
 
   -trainCommand.txt has an example command to train a model
