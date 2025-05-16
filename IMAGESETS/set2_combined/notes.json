@@ -1,0 +1,41 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "3.5mm_audio"
+    },
+    {
+      "id": 1,
+      "name": "DisplayPort"
+    },
+    {
+      "id": 2,
+      "name": "Ethernet"
+    },
+    {
+      "id": 3,
+      "name": "HDMI"
+    },
+    {
+      "id": 4,
+      "name": "IEC-Power"
+    },
+    {
+      "id": 5,
+      "name": "Micro-USB"
+    },
+    {
+      "id": 6,
+      "name": "USB"
+    },
+    {
+      "id": 7,
+      "name": "USB-C"
+    }
+  ],
+  "info": {
+    "year": 2025,
+    "version": "1.0",
+    "contributor": "Label Studio"
+  }
+}

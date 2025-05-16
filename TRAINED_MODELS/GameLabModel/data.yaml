@@ -1,0 +1,12 @@
+path: C:\Users\sami.karkkainen\YOLO\data
+train: train/images
+val: validation/images
+nc: 7
+names:
+- book
+- chair
+- energy_drink
+- monitor
+- mouse
+- pen
+- phone

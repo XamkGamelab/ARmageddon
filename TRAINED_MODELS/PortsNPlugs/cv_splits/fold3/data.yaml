@@ -1,0 +1,13 @@
+names:
+- 3.5mm_audio
+- DisplayPort
+- Ethernet
+- HDMI
+- IEC-Power
+- Micro-USB
+- USB
+- USB-C
+nc: 8
+path: C:\Users\sami.karkkainen\YOLO\cv_splits\fold3
+train: train.txt
+val: val.txt

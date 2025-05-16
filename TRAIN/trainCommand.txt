@@ -1,0 +1,1 @@
+yolo detect train data=data.yaml model=yolo11s.pt epochs=150 imgsz=480 hsv_h=0.25 hsv_s=0.6 hsv_v=0.5 scale=0.3 perspective=0.001 degrees=180
