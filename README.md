@@ -32,6 +32,7 @@
   
   -*Copy* the contents in a local directory and run testing there!
 
+  -yolo_detect.py is the script for running a test. For an example command, check runModelCommand.txt
 
 
 ### TRAIN
@@ -42,6 +43,19 @@
   
   -**Do not add any training data here**
 
+  -train_val_split script splits your training data into train and validation folders
+
+  -trainCommand.txt has an example command to train a model
+
+  Your TRAIN folder should contain:
+  
+  >a "data" directory with "train" and "validation" inside
+
+  >data.yaml file (set it up according to your data)
+
+  >a model to fine-tune or if starting from scratch, the command should automatically download a model from ultralytics github
+
+  >don't worry about cross_validate.py, you don't need it
 
 
 ### TRAINED_MODELS
