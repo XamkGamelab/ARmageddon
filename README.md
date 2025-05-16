@@ -8,7 +8,7 @@
 
 ### IMAGESETS
 
-  -Contains full imagesets (img only)
+  -Contains full imagesets with labels
   
   -(not split into val-train)
 
