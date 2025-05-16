@@ -1,4 +1,12 @@
+The idea here is to store previously trained models and provide the basic structure for training and testing environments.
+
+Your local test/train directories can remain messy, but when you add your trained models and data here, make sure it remains organised.
+
+
+
 Directories:
+
+
 
 IMAGESETS
 
