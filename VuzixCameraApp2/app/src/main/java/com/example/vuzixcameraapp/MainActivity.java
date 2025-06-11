@@ -384,10 +384,16 @@ public class MainActivity extends AppCompatActivity {
             Log.d("Debug", "after scaling, x1: " + x1 + " y1: " + y1 + " x2: " +  x2 + " y2: " + y2);
             Log.d("Debug", "scale: " + scale);
 
+            /*
             x1 = clamp(x1, 0, originalWidth);
             x2 = clamp(x2, 0, originalWidth);
             y1 = clamp(y1, 0, originalHeight);
-            y2 = clamp(y2, 0, originalHeight);
+            y2 = clamp(y2, 0, originalHeight);*/
+
+            x1 = Math.max(0f, Math.min(x1, (float) originalWidth));
+            x2 = Math.max(0f, Math.min(x2, (float) originalWidth));
+            y1 = Math.max(0f, Math.min(y1, (float) originalHeight));
+            y2 = Math.max(0f, Math.min(y2, (float) originalHeight));
             if (x2 <= x1 || y2 <= y1) {
                 //Log.w("Debug", "Invalid box dimensions after clamping. Skipping.");
                 continue;
