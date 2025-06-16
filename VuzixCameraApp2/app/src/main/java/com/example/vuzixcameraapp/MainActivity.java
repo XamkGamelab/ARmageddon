@@ -137,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
         }
         // Load TFLite model
         try {
-            MappedByteBuffer modelBuffer = loadModelFile("augs2_float16.tflite");
+            MappedByteBuffer modelBuffer = loadModelFile("chairnano200-250aug_float16.tflite");
             if (modelBuffer == null) {
                 return;
             }
@@ -155,7 +155,9 @@ public class MainActivity extends AppCompatActivity {
 
                 gpuDelegate = new GpuDelegate(options1);
                 options.addDelegate(gpuDelegate);
+                Log.d("MyApp", "Using GPU delegate");
             } catch (Exception e) {
+                Log.w("MyApp", "GPU delegate failed, falling back to CPU", e);
                 options.setNumThreads(4);
             }
 
@@ -259,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
 
     // Preprocess bitmap to 640x640 with padding, normalization
     private PreprocessingResult preprocessBitmap(Bitmap originalBitmap) {
-        int targetSize = 640;
+        int targetSize = 480;
         int originalWidth = originalBitmap.getWidth();
         int originalHeight = originalBitmap.getHeight();
 
@@ -332,10 +334,10 @@ public class MainActivity extends AppCompatActivity {
             if (confidence < 0.5f) continue;
 
             // Scale to model's 640×640 padded input
-            x1 *= 640;
-            x2 *= 640;
-            y1 *= 640;
-            y2 *= 640;
+            x1 *= 480;
+            x2 *= 480;
+            y1 *= 480;
+            y2 *= 480;
 // Undo the letterboxing pad
             x1 -= padX;
             x2 -= padX;
