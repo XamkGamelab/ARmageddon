@@ -16,6 +16,13 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.YuvImage;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.renderscript.Allocation;
+import android.renderscript.Element;
+import android.renderscript.RenderScript;
+import android.renderscript.ScriptIntrinsicYuvToRGB;
+import android.renderscript.Type;
 import android.util.Log;
 import android.view.ViewTreeObserver;
 import android.view.WindowMetrics;
@@ -58,7 +65,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE_PERMISSIONS = 10;
     private static final String[] REQUIRED_PERMISSIONS = new String[]{Manifest.permission.CAMERA};
     private static final int INFERENCE_INTERVAL = 5; // Run inference every 5 frames
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
     // UI and processing fields
     private PreviewView previewView;
     private Interpreter tflite;
@@ -69,11 +75,21 @@ public class MainActivity extends AppCompatActivity {
     private int previewHeight;
     private ImageView imageView;
     private int frameCounter = 0;
+    private volatile boolean isInferenceRunning = false;
+    private HandlerThread analysisThread;
+    private Handler analysisHandler;
+    private RenderScript rs;
+    private ScriptIntrinsicYuvToRGB yuvToRgbIntrinsic;
+    private Allocation inputAllocation;
+    private Allocation outputAllocation;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        analysisThread = new HandlerThread("AnalysisThread");
+        analysisThread.start();
+        analysisHandler = new Handler(analysisThread.getLooper());
 
         // UI bindings
         overlayView = findViewById(R.id.overlayView);
@@ -92,7 +108,6 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("MyApp", "OverlayView size: " + screenWidth + "x" + screenHeight);
             }
         });
-        WindowMetrics metrics = getWindowManager().getCurrentWindowMetrics();
 
         previewView = findViewById(R.id.previewView);
         overlayView.setPreviewView(previewView);
@@ -165,23 +180,7 @@ public class MainActivity extends AppCompatActivity {
 
                 // Setup image analysis
                 ImageAnalysis imageAnalysis = new ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build();
-                imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(this), image -> {
-                    frameCounter++;
-                    executor.execute(() -> {
-                        try {
-                            if (frameCounter % INFERENCE_INTERVAL == 0) {
-                                Bitmap bitmap = toBitmap(image);
-                                List<OverlayView.Detection> detections = runInference(bitmap);
-                                runOnUiThread(() -> overlayView.setDetections(detections));
-                            }
-                        } catch (Exception e) {
-                            Log.e("MyApp", "Error during analysis", e);
-                        } finally {
-                            image.close();
-                        }
-                    });
-                    if (frameCounter > 10000) frameCounter = 0;
-                });
+                imageAnalysis.setAnalyzer(Runnable::run, image -> analysisHandler.post(() -> analyzeImage(image)));
                 // Bind to lifecycle
                 Camera camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
             } catch (ExecutionException | InterruptedException e) {
@@ -191,6 +190,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Bitmap toBitmap(ImageProxy image) {
+        if(inputAllocation == null){
+            initRenderScript(image.getWidth(), image.getHeight());
+        }
         ByteBuffer yBuffer = image.getPlanes()[0].getBuffer();
         ByteBuffer uBuffer = image.getPlanes()[1].getBuffer();
         ByteBuffer vBuffer = image.getPlanes()[2].getBuffer();
@@ -198,26 +200,26 @@ public class MainActivity extends AppCompatActivity {
         int ySize = yBuffer.remaining();
         int uSize = uBuffer.remaining();
         int vSize = vBuffer.remaining();
-        byte[] nv21 = new byte[ySize + uSize + vSize];
-        yBuffer.get(nv21, 0, ySize);
-        vBuffer.get(nv21, ySize, vSize);
-        uBuffer.get(nv21, ySize + vSize, uSize);
-        YuvImage yuvImage = new YuvImage(nv21,
-                ImageFormat.NV21,
-                image.getWidth(),
-                image.getHeight(),
-                null
-        );
-        float rotation = 90; //90 for mobile, 180 for AR
+
+        byte[] yuvBytes = new byte[ySize + uSize + vSize];
+        yBuffer.get(yuvBytes, 0, ySize);
+        vBuffer.get(yuvBytes, ySize, vSize);
+        uBuffer.get(yuvBytes, ySize + vSize, uSize);
+
+        inputAllocation.copyFrom(yuvBytes);
+        yuvToRgbIntrinsic.setInput(inputAllocation);
+        yuvToRgbIntrinsic.forEach(outputAllocation);
+        Bitmap bitmap = Bitmap.createBitmap(image.getWidth(), image.getHeight(), Bitmap.Config.ARGB_8888);
+        outputAllocation.copyTo(bitmap);
+        float rotation = 180; // 90 for mobile, 180 for AR
         overlayView.setRotation(rotation);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        yuvImage.compressToJpeg(new Rect(0, 0, image.getWidth(), image.getHeight()), 100, out);
-        byte[] jpegBytes = out.toByteArray();
-        Bitmap bitmap = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length);
         Matrix matrix = new Matrix();
         matrix.postRotate(rotation);
-        overlayView.setRotation((int) rotation);
-        Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+
+        Bitmap rotatedBitmap = Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true
+        );
+
         return rotatedBitmap;
     }
 
@@ -276,13 +278,16 @@ public class MainActivity extends AppCompatActivity {
         canvas.drawBitmap(scaled, padX, padY, null);
 
         float[][][][] input = new float[1][targetSize][targetSize][3];
-        for (int y = 0; y < targetSize; y++) {
-            for (int x = 0; x < targetSize; x++) {
-                int px = resized.getPixel(x, y);
-                input[0][y][x][0] = ((px >> 16) & 0xFF) / 255.0f;
-                input[0][y][x][1] = ((px >> 8) & 0xFF) / 255.0f;
-                input[0][y][x][2] = (px & 0xFF) / 255.0f;
-            }
+        int[] pixels = new int[targetSize * targetSize];
+        resized.getPixels(pixels, 0, targetSize, 0, 0, targetSize, targetSize);
+        for(int i = 0; i < pixels.length; i++){
+            int pixel = pixels[i];
+            int y = i / targetSize;
+            int x = i % targetSize;
+
+            input[0][y][x][0] = ((pixel >> 16) & 0xFF) / 255.0f; // R
+            input[0][y][x][1] = ((pixel >> 8) & 0xFF) / 255.0f;  // G
+            input[0][y][x][2] = (pixel & 0xFF) / 255.0f;         // B
         }
 
         PreprocessingResult result = new PreprocessingResult();
@@ -354,5 +359,43 @@ public class MainActivity extends AppCompatActivity {
             results.add(new OverlayView.Detection(scaledBox, "class_" + classId, confidence));
         }
         return results;
+    }
+    private void analyzeImage(ImageProxy image){
+        if (isInferenceRunning || frameCounter++ % INFERENCE_INTERVAL != 0) {
+            image.close();
+            return;
+        }
+
+        isInferenceRunning = true;
+        Bitmap bitmap = toBitmap(image);
+
+        List<OverlayView.Detection> detections = runInference(bitmap);
+
+        runOnUiThread(() -> overlayView.setDetections(detections));
+        image.close();
+        isInferenceRunning = false;
+    }
+    @Override
+    protected void onDestroy(){
+        super.onDestroy();
+        if(tflite != null) tflite.close();
+        if(analysisThread != null){
+            analysisThread.quitSafely();
+            try{
+                analysisThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    private void initRenderScript(int width, int height){
+        rs = RenderScript.create(this);
+        yuvToRgbIntrinsic = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs));
+
+        Type.Builder yuvType = new Type.Builder(rs, Element.U8(rs)).setX(width * height * 3/2);
+        Type.Builder rgbaType = new Type.Builder(rs, Element.RGBA_8888(rs)).setX(width).setY(height);
+
+        inputAllocation = Allocation.createTyped(rs, yuvType.create(), Allocation.USAGE_SCRIPT);
+        outputAllocation = Allocation.createTyped(rs, rgbaType.create(), Allocation.USAGE_SCRIPT);
     }
 }
