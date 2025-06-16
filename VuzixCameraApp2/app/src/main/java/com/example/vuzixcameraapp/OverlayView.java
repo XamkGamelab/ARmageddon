@@ -17,7 +17,7 @@ import java.util.List;
 public class OverlayView extends View{
     private final Paint boxPaint;
     private final Paint textPaint;
-    private int rotation;
+    private float rotation;
     public static class Detection{
         public RectF box;
         public String label;
@@ -51,36 +51,65 @@ public class OverlayView extends View{
         this.detections = detections;
         postInvalidate();
     }
-    public void setRotation(int rotation){
+    public void setRotation(float rotation){
         this.rotation = rotation;
     }
     @Override
     protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
 
-        int viewWidth = previewView.getWidth();
-        int viewHeight = previewView.getHeight();
-        Log.d("Debug", "View size: " + viewWidth + "X" + viewHeight);
-        float imageWidth = 640f;
-        float imageHeight = 480f;
-        float scaleX = viewWidth / imageWidth;
-        float scaleY = viewHeight / imageHeight;
-        float scale = Math.max(scaleX, scaleY);
-        float offsetX = (viewWidth - imageWidth * scale) / 2f;
-        float offsetY = (viewHeight - imageHeight * scale) /2f;
+        if(rotation == 180){
+            int viewWidth = previewView.getWidth();
+            int viewHeight = previewView.getHeight();
+            Log.d("Debug", "View size: " + viewWidth + "X" + viewHeight);
+            float imageWidth = 640f;
+            float imageHeight = 480f;
+            float scaleX = viewWidth / imageWidth;
+            float scaleY = viewHeight / imageHeight;
+            float scale = Math.max(scaleX, scaleY);
+            float offsetX = (viewWidth - imageWidth * scale) / 2f;
+            float offsetY = (viewHeight - imageHeight * scale) /2f;
 
-        //Log.e("MyApp", "trying to draw rectangle");
-        for(Detection detection: detections){
-            //Log.e("MyApp", "label: " + detection.label);
-            //Log.e("MyApp", "Box: " + detection.box.toString());
-            float left = detection.box.left * scale + offsetX;
-            float top = detection.box.top * scale + offsetY;
-            float right = detection.box.right * scale + offsetX;
-            float bottom = detection.box.bottom * scale + offsetY;
-            canvas.drawRect(left, top, right, bottom, boxPaint);
-            canvas.drawText(detection.label + " " + String.format("%.2f", detection.confidence),
-                    left, top - 10, textPaint);
-            //Log.e("MyApp", "drawing rectangle");
+            //Log.e("MyApp", "trying to draw rectangle");
+            for(Detection detection: detections){
+                //Log.e("MyApp", "label: " + detection.label);
+                //Log.e("MyApp", "Box: " + detection.box.toString());
+                float left = detection.box.left * scale + offsetX;
+                float top = detection.box.top * scale + offsetY;
+                float right = detection.box.right * scale + offsetX;
+                float bottom = detection.box.bottom * scale + offsetY;
+                canvas.drawRect(left, top, right, bottom, boxPaint);
+                canvas.drawText(detection.label + " " + String.format("%.2f", detection.confidence),
+                        left, top - 10, textPaint);
+                //Log.e("MyApp", "drawing rectangle");
+            }
         }
+        if(rotation == 90){
+            int viewWidth = previewView.getWidth();
+            int viewHeight = previewView.getHeight();
+            Log.d("Debug", "View size: " + viewWidth + "X" + viewHeight);
+            float imageWidth = 480f;
+            float imageHeight = 640f;
+            float scaleX = viewWidth / imageWidth;
+            float scaleY = viewHeight / imageHeight;
+            float scale = Math.max(scaleX, scaleY);
+            float offsetX = (viewWidth - imageWidth * scale) / 2f;
+            float offsetY = (viewHeight - imageHeight * scale) /2f;
+
+            //Log.e("MyApp", "trying to draw rectangle");
+            for(Detection detection: detections){
+                //Log.e("MyApp", "label: " + detection.label);
+                //Log.e("MyApp", "Box: " + detection.box.toString());
+                float left = detection.box.left * scale + offsetX;
+                float top = detection.box.top * scale + offsetY;
+                float right = detection.box.right * scale + offsetX;
+                float bottom = detection.box.bottom * scale + offsetY;
+                canvas.drawRect(left, top, right, bottom, boxPaint);
+                canvas.drawText(detection.label + " " + String.format("%.2f", detection.confidence),
+                        left, top - 10, textPaint);
+                //Log.e("MyApp", "drawing rectangle");
+            }
+        }
+
     }
 }
