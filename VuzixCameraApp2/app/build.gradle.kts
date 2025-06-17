@@ -51,4 +51,5 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-support:+")
     implementation("org.tensorflow:tensorflow-lite-gpu-api:+")
     implementation("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:+")
+    implementation("org.tensorflow:tensorflow-lite-metadata:+")
 }

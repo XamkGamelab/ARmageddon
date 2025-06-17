@@ -1,0 +1,8 @@
+armrest
+backrest
+base
+caster
+cylinder
+lever
+mount
+seat

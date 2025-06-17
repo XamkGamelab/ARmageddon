@@ -6,15 +6,10 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.ImageFormat;
 import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.YuvImage;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -25,7 +20,6 @@ import android.renderscript.ScriptIntrinsicYuvToRGB;
 import android.renderscript.Type;
 import android.util.Log;
 import android.view.ViewTreeObserver;
-import android.view.WindowMetrics;
 import android.widget.ImageView;
 import android.widget.Toast;
 
@@ -46,25 +40,25 @@ import com.google.common.util.concurrent.ListenableFuture;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.gpu.GpuDelegate;
 
-import java.io.ByteArrayOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
     // Constants for permission and inference
     private static final int REQUEST_CODE_PERMISSIONS = 10;
     private static final String[] REQUIRED_PERMISSIONS = new String[]{Manifest.permission.CAMERA};
-    private static final int INFERENCE_INTERVAL = 5; // Run inference every 5 frames
+    private static int INFERENCE_INTERVAL = 5; // Run inference every 5 frames
     // UI and processing fields
     private PreviewView previewView;
     private Interpreter tflite;
@@ -82,14 +76,20 @@ public class MainActivity extends AppCompatActivity {
     private ScriptIntrinsicYuvToRGB yuvToRgbIntrinsic;
     private Allocation inputAllocation;
     private Allocation outputAllocation;
+    private ByteBuffer inputBuffer;
+    private List<String> labels;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        int targetSize = 480;
+        int numBytes = 4 * targetSize * targetSize * 3;
+        inputBuffer = ByteBuffer.allocateDirect(numBytes).order(ByteOrder.nativeOrder());
         setContentView(R.layout.activity_main);
         analysisThread = new HandlerThread("AnalysisThread");
         analysisThread.start();
         analysisHandler = new Handler(analysisThread.getLooper());
+        loadLabels();
 
         // UI bindings
         overlayView = findViewById(R.id.overlayView);
@@ -192,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Bitmap toBitmap(ImageProxy image) {
-        if(inputAllocation == null){
+        if (inputAllocation == null) {
             initRenderScript(image.getWidth(), image.getHeight());
         }
         ByteBuffer yBuffer = image.getPlanes()[0].getBuffer();
@@ -213,7 +213,7 @@ public class MainActivity extends AppCompatActivity {
         yuvToRgbIntrinsic.forEach(outputAllocation);
         Bitmap bitmap = Bitmap.createBitmap(image.getWidth(), image.getHeight(), Bitmap.Config.ARGB_8888);
         outputAllocation.copyTo(bitmap);
-        float rotation = 180; // 90 for mobile, 180 for AR
+        float rotation = 90; // 90 for mobile, 180 for AR
         overlayView.setRotation(rotation);
         Matrix matrix = new Matrix();
         matrix.postRotate(rotation);
@@ -279,21 +279,26 @@ public class MainActivity extends AppCompatActivity {
         canvas.drawColor(Color.BLACK);
         canvas.drawBitmap(scaled, padX, padY, null);
 
-        float[][][][] input = new float[1][targetSize][targetSize][3];
+        //float[][][][] input = new float[1][targetSize][targetSize][3];
+        inputBuffer.rewind();
         int[] pixels = new int[targetSize * targetSize];
         resized.getPixels(pixels, 0, targetSize, 0, 0, targetSize, targetSize);
-        for(int i = 0; i < pixels.length; i++){
+        for (int i = 0; i < pixels.length; i++) {
             int pixel = pixels[i];
             int y = i / targetSize;
             int x = i % targetSize;
 
-            input[0][y][x][0] = ((pixel >> 16) & 0xFF) / 255.0f; // R
+            inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255.0f);
+            inputBuffer.putFloat(((pixel >> 8) & 0xFF) / 255.0f);
+            inputBuffer.putFloat((pixel & 0xFF) / 255.0f);
+
+            /*input[0][y][x][0] = ((pixel >> 16) & 0xFF) / 255.0f; // R
             input[0][y][x][1] = ((pixel >> 8) & 0xFF) / 255.0f;  // G
-            input[0][y][x][2] = (pixel & 0xFF) / 255.0f;         // B
+            input[0][y][x][2] = (pixel & 0xFF) / 255.0f;         // B*/
         }
 
         PreprocessingResult result = new PreprocessingResult();
-        result.input = input;
+        result.inputBuffer = inputBuffer;
         result.scale = scale;
         result.padX = padX;
         result.padY = padY;
@@ -306,15 +311,12 @@ public class MainActivity extends AppCompatActivity {
         int originalWidth = bitmap.getWidth();
         int originalHeight = bitmap.getHeight();
         PreprocessingResult prep = preprocessBitmap(bitmap);
-        float[][][][] input = prep.input;
+        ByteBuffer input = prep.inputBuffer;
+        //float[][][][] input = prep.input;
         float scale = prep.scale;
         float padX = prep.padX;
         float padY = prep.padY;
         float[][][] output = new float[1][300][6];
-        Paint paint = new Paint();
-        paint.setColor(Color.RED);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(2);
 
         if (tflite == null) {
             return new ArrayList<>();
@@ -330,8 +332,12 @@ public class MainActivity extends AppCompatActivity {
             float y2 = output[0][i][3];
             float confidence = output[0][i][4];
             int classId = (int) output[0][i][5];
+            String label = "unknown";
 
-            if (confidence < 0.5f) continue;
+            if (confidence < 0.7f) continue;
+            if(classId >= 0 && classId < labels.size()){
+                label = labels.get(classId);
+            }
 
             // Scale to model's 640×640 padded input
             x1 *= 480;
@@ -358,46 +364,68 @@ public class MainActivity extends AppCompatActivity {
                 continue;
             }
             RectF scaledBox = new RectF(x1, y1, x2, y2);
-            results.add(new OverlayView.Detection(scaledBox, "class_" + classId, confidence));
+            results.add(new OverlayView.Detection(scaledBox, label, confidence));
         }
         return results;
     }
-    private void analyzeImage(ImageProxy image){
-        if (isInferenceRunning || frameCounter++ % INFERENCE_INTERVAL != 0) {
+
+    private void analyzeImage(ImageProxy image) {
+        if(isInferenceRunning){
             image.close();
             return;
         }
-
+        frameCounter++;
+        if(frameCounter % INFERENCE_INTERVAL != 0){
+            image.close();
+            return;
+        }
         isInferenceRunning = true;
+        long startNs = System.nanoTime();
         Bitmap bitmap = toBitmap(image);
 
         List<OverlayView.Detection> detections = runInference(bitmap);
 
+        long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+        int targetMs = 200;
+        INFERENCE_INTERVAL = Math.max(1, (int)(targetMs / Math.max(elapsedMs, 1)));
         runOnUiThread(() -> overlayView.setDetections(detections));
         image.close();
         isInferenceRunning = false;
     }
+
     @Override
-    protected void onDestroy(){
+    protected void onDestroy() {
         super.onDestroy();
-        if(tflite != null) tflite.close();
-        if(analysisThread != null){
+        if (tflite != null) tflite.close();
+        if (analysisThread != null) {
             analysisThread.quitSafely();
-            try{
+            try {
                 analysisThread.join();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
     }
-    private void initRenderScript(int width, int height){
+
+    private void initRenderScript(int width, int height) {
         rs = RenderScript.create(this);
         yuvToRgbIntrinsic = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs));
 
-        Type.Builder yuvType = new Type.Builder(rs, Element.U8(rs)).setX(width * height * 3/2);
+        Type.Builder yuvType = new Type.Builder(rs, Element.U8(rs)).setX(width * height * 3 / 2);
         Type.Builder rgbaType = new Type.Builder(rs, Element.RGBA_8888(rs)).setX(width).setY(height);
 
         inputAllocation = Allocation.createTyped(rs, yuvType.create(), Allocation.USAGE_SCRIPT);
         outputAllocation = Allocation.createTyped(rs, rgbaType.create(), Allocation.USAGE_SCRIPT);
+    }
+    private void loadLabels(){
+        labels = new ArrayList<>();
+        try(BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open("labels.txt")))){
+            String line;
+            while((line = reader.readLine()) != null){
+                labels.add(line.trim());
+            }
+        } catch (IOException e) {
+            Log.e("MyApp", "Failed to load labels", e);
+        }
     }
 }
