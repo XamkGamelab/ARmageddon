@@ -104,8 +104,6 @@ public class MainActivity extends AppCompatActivity {
 
                 screenWidth = overlayView.getWidth();
                 screenHeight = overlayView.getHeight();
-
-                Log.d("MyApp", "OverlayView size: " + screenWidth + "x" + screenHeight);
             }
         });
 
@@ -120,8 +118,6 @@ public class MainActivity extends AppCompatActivity {
                 int previewWidth = previewView.getWidth();
                 int previewHeight = previewView.getHeight();
 
-                Log.d("MyApp", "PreviewView size after layout: " + previewWidth + "x" + previewHeight);
-
                 // Store previewWidth and previewHeight somewhere accessible for scaling
                 // For example, in your activity fields:
                 MainActivity.this.previewWidth = previewWidth;
@@ -131,7 +127,6 @@ public class MainActivity extends AppCompatActivity {
         // Camera permission check
         if (allPermissionsGranted()) {
             startCamera();
-            Log.d("MyApp", "starting camera");
         } else {
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
         }
@@ -155,7 +150,6 @@ public class MainActivity extends AppCompatActivity {
 
                 gpuDelegate = new GpuDelegate(options1);
                 options.addDelegate(gpuDelegate);
-                Log.d("MyApp", "Using GPU delegate");
             } catch (Exception e) {
                 Log.w("MyApp", "GPU delegate failed, falling back to CPU", e);
                 options.setNumThreads(4);
@@ -213,7 +207,7 @@ public class MainActivity extends AppCompatActivity {
         yuvToRgbIntrinsic.forEach(outputAllocation);
         Bitmap bitmap = Bitmap.createBitmap(image.getWidth(), image.getHeight(), Bitmap.Config.ARGB_8888);
         outputAllocation.copyTo(bitmap);
-        float rotation = 90; // 90 for mobile, 180 for AR
+        float rotation = 180; // 90 for mobile, 180 for AR
         overlayView.setRotation(rotation);
         Matrix matrix = new Matrix();
         matrix.postRotate(rotation);
@@ -279,22 +273,15 @@ public class MainActivity extends AppCompatActivity {
         canvas.drawColor(Color.BLACK);
         canvas.drawBitmap(scaled, padX, padY, null);
 
-        //float[][][][] input = new float[1][targetSize][targetSize][3];
         inputBuffer.rewind();
         int[] pixels = new int[targetSize * targetSize];
         resized.getPixels(pixels, 0, targetSize, 0, 0, targetSize, targetSize);
         for (int i = 0; i < pixels.length; i++) {
             int pixel = pixels[i];
-            int y = i / targetSize;
-            int x = i % targetSize;
 
             inputBuffer.putFloat(((pixel >> 16) & 0xFF) / 255.0f);
             inputBuffer.putFloat(((pixel >> 8) & 0xFF) / 255.0f);
             inputBuffer.putFloat((pixel & 0xFF) / 255.0f);
-
-            /*input[0][y][x][0] = ((pixel >> 16) & 0xFF) / 255.0f; // R
-            input[0][y][x][1] = ((pixel >> 8) & 0xFF) / 255.0f;  // G
-            input[0][y][x][2] = (pixel & 0xFF) / 255.0f;         // B*/
         }
 
         PreprocessingResult result = new PreprocessingResult();
@@ -312,7 +299,6 @@ public class MainActivity extends AppCompatActivity {
         int originalHeight = bitmap.getHeight();
         PreprocessingResult prep = preprocessBitmap(bitmap);
         ByteBuffer input = prep.inputBuffer;
-        //float[][][][] input = prep.input;
         float scale = prep.scale;
         float padX = prep.padX;
         float padY = prep.padY;
