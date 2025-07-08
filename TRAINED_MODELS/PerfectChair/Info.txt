@@ -1,0 +1,4 @@
+Anything with "aug" or "augs" has used augmentation when training.
+Numbers represent the amount of epochs that the model has been trained.
+Anything with "synth" has been trained with ONLY synthetic data. "Real" has been trained without any synthetic images.
+
