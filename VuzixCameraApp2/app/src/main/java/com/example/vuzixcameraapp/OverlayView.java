@@ -18,15 +18,19 @@ public class OverlayView extends View{
     private final Paint boxPaint;
     private final Paint textPaint;
     private float rotation;
+    private int ID = 0;
+    private int IDamount = 8;
     public static class Detection{
         public RectF box;
         public String label;
         public float confidence;
+        public int ID;
 
-        public Detection(RectF box, String label, float confidence){
+        public Detection(RectF box, String label, float confidence, int ID){
             this.box = box;
             this.label = label;
             this.confidence = confidence;
+            this.ID = ID;
         }
     }
     private PreviewView previewView;
@@ -54,6 +58,14 @@ public class OverlayView extends View{
     public void setRotation(float rotation){
         this.rotation = rotation;
     }
+    public void setID(int ID)
+    {
+        this.ID += ID;
+        if(this.ID > IDamount-1){this.ID = 0;}
+        if(this.ID < 0){this.ID = IDamount -1;}
+        Log.d("VuzixInput", "current ID: " + this.ID);
+    }
+    public void setIDamount(int IDamount){this.IDamount = IDamount;}
     @Override
     protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
@@ -72,8 +84,7 @@ public class OverlayView extends View{
 
             //Log.e("MyApp", "trying to draw rectangle");
             for(Detection detection: detections){
-                //Log.e("MyApp", "label: " + detection.label);
-                //Log.e("MyApp", "Box: " + detection.box.toString());
+                if(ID != detection.ID){continue;}
                 float left = detection.box.left * scale + offsetX;
                 float top = detection.box.top * scale + offsetY;
                 float right = detection.box.right * scale + offsetX;
@@ -98,8 +109,7 @@ public class OverlayView extends View{
 
             //Log.e("MyApp", "trying to draw rectangle");
             for(Detection detection: detections){
-                //Log.e("MyApp", "label: " + detection.label);
-                //Log.e("MyApp", "Box: " + detection.box.toString());
+                if(ID != detection.ID){continue;}
                 float left = detection.box.left * scale + offsetX;
                 float top = detection.box.top * scale + offsetY;
                 float right = detection.box.right * scale + offsetX;

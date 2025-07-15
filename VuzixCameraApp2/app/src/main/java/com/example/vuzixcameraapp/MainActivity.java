@@ -5,6 +5,8 @@ import static java.lang.Math.clamp;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
+import android.gesture.Gesture;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -19,6 +21,10 @@ import android.renderscript.RenderScript;
 import android.renderscript.ScriptIntrinsicYuvToRGB;
 import android.renderscript.Type;
 import android.util.Log;
+import android.view.GestureDetector;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -78,10 +84,13 @@ public class MainActivity extends AppCompatActivity {
     private Allocation outputAllocation;
     private ByteBuffer inputBuffer;
     private List<String> labels;
+    private float rotation = 0;
+    private GestureDetector gestureDetector;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        gestureDetector = new GestureDetector(this, new SwipeGestureListener());
         int targetSize = 480;
         int numBytes = 4 * targetSize * targetSize * 3;
         inputBuffer = ByteBuffer.allocateDirect(numBytes).order(ByteOrder.nativeOrder());
@@ -89,11 +98,16 @@ public class MainActivity extends AppCompatActivity {
         analysisThread = new HandlerThread("AnalysisThread");
         analysisThread.start();
         analysisHandler = new Handler(analysisThread.getLooper());
-        loadLabels();
 
         // UI bindings
         overlayView = findViewById(R.id.overlayView);
         imageView = findViewById(R.id.debugImageView);
+        View mainView = findViewById(android.R.id.content);
+        mainView.setOnTouchListener((v, event) -> gestureDetector.onTouchEvent(event));
+        mainView.setClickable(true);
+        mainView.setFocusable(true);
+
+        loadLabels();
 
         // Get actual screen size of overlayView after layout pass
         overlayView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
@@ -130,9 +144,22 @@ public class MainActivity extends AppCompatActivity {
         } else {
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
         }
+        AssetManager assetManager = getAssets();
+        String fileName = "";
+        try{
+            String[] assetFiles = assetManager.list("");
+            for (String filename : assetFiles){
+                if (filename.endsWith(".tflite")){
+                    fileName = filename;
+                }
+            }
+        }
+        catch(IOException e){
+            e.printStackTrace();
+        }
         // Load TFLite model
         try {
-            MappedByteBuffer modelBuffer = loadModelFile("chairnano200-250aug_float16.tflite");
+            MappedByteBuffer modelBuffer = loadModelFile(fileName);
             if (modelBuffer == null) {
                 return;
             }
@@ -207,7 +234,6 @@ public class MainActivity extends AppCompatActivity {
         yuvToRgbIntrinsic.forEach(outputAllocation);
         Bitmap bitmap = Bitmap.createBitmap(image.getWidth(), image.getHeight(), Bitmap.Config.ARGB_8888);
         outputAllocation.copyTo(bitmap);
-        float rotation = 180; // 90 for mobile, 180 for AR
         overlayView.setRotation(rotation);
         Matrix matrix = new Matrix();
         matrix.postRotate(rotation);
@@ -350,7 +376,7 @@ public class MainActivity extends AppCompatActivity {
                 continue;
             }
             RectF scaledBox = new RectF(x1, y1, x2, y2);
-            results.add(new OverlayView.Detection(scaledBox, label, confidence));
+            results.add(new OverlayView.Detection(scaledBox, label, confidence, classId));
         }
         return results;
     }
@@ -364,6 +390,10 @@ public class MainActivity extends AppCompatActivity {
         if(frameCounter % INFERENCE_INTERVAL != 0){
             image.close();
             return;
+        }
+        int rotationDegrees = image.getImageInfo().getRotationDegrees();
+        if(rotation != rotationDegrees){
+            rotation = (float)rotationDegrees;
         }
         isInferenceRunning = true;
         long startNs = System.nanoTime();
@@ -413,5 +443,56 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             Log.e("MyApp", "Failed to load labels", e);
         }
+        int labelAmount = labels.size();
+        overlayView.setIDamount(labelAmount);
+        Log.d("VuzixInput", "label amount: " + labelAmount);
+    }
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event){
+        switch (keyCode){
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                Log.d("VuzixInput", "right button pressed");
+                overlayView.setID(1);
+                return true;
+
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                Log.d("VuzixInput", "left button pressed");
+                overlayView.setID(-1);
+                return true;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+                Log.d("VuzixInput", "select button pressed");
+                //run method that shows part info
+                return true;
+            default: return super.onKeyDown(keyCode, event);
+        }
+    }
+    private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener{
+        private static final int SWIPE_THRESHOLD = 100;
+        private static final int SWIPE_VELOCITY_THRESHOLD = 100;
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY){
+            float diffX = e2.getX() - e1.getX();
+            float diffY = e2.getY() - e1.getY();
+            if(Math.abs(diffX) > Math.abs(diffY)){
+                if(Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD){
+                    if(diffX > 0){
+                        onSwipeRight();
+                    } else{
+                        onSwipeLeft();
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+    private void onSwipeRight(){
+        Log.d("VuxixInput", "Swiped right");
+        overlayView.setID(1);
+    }
+    private void onSwipeLeft(){
+        Log.d("VuzixInput", "Swiped left");
+        overlayView.setID(-1);
     }
 }
