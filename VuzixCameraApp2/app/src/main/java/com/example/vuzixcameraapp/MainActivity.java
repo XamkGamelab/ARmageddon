@@ -3,6 +3,7 @@ package com.example.vuzixcameraapp;
 import static java.lang.Math.clamp;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
@@ -12,6 +13,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.RectF;
+import android.icu.text.IDNA;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -22,11 +24,15 @@ import android.renderscript.ScriptIntrinsicYuvToRGB;
 import android.renderscript.Type;
 import android.util.Log;
 import android.view.GestureDetector;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -43,6 +49,8 @@ import androidx.core.content.ContextCompat;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.gpu.GpuDelegate;
 
@@ -50,13 +58,18 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity {
@@ -71,9 +84,13 @@ public class MainActivity extends AppCompatActivity {
     private int screenWidth;
     private int screenHeight;
     private OverlayView overlayView;
+    private FrameLayout infoOverlay;
+    private TextView infoText;
+    private ImageView infoImage;
+    private ScrollView infoScrollView;
+    private TextView detectionStatus;
     private int previewWidth;
     private int previewHeight;
-    private ImageView imageView;
     private int frameCounter = 0;
     private volatile boolean isInferenceRunning = false;
     private HandlerThread analysisThread;
@@ -99,13 +116,24 @@ public class MainActivity extends AppCompatActivity {
         analysisThread.start();
         analysisHandler = new Handler(analysisThread.getLooper());
 
+
         // UI bindings
         overlayView = findViewById(R.id.overlayView);
-        imageView = findViewById(R.id.debugImageView);
         View mainView = findViewById(android.R.id.content);
+        infoOverlay = findViewById(R.id.info_overlay);
+        infoText = findViewById(R.id.info_text);
+        infoImage = findViewById(R.id.info_image);
+        infoScrollView = findViewById(R.id.info_scroll_view);
+        detectionStatus = findViewById(R.id.detection_status);
+        overlayView.setMap(loadInfoFromAssets(this));
+        overlayView.setOverlay(infoOverlay, infoText, infoImage, detectionStatus);
         mainView.setOnTouchListener((v, event) -> gestureDetector.onTouchEvent(event));
         mainView.setClickable(true);
         mainView.setFocusable(true);
+        infoScrollView.setOnTouchListener((v, event) -> {
+            gestureDetector.onTouchEvent(event);
+            return false;
+        });
 
         loadLabels();
 
@@ -146,15 +174,14 @@ public class MainActivity extends AppCompatActivity {
         }
         AssetManager assetManager = getAssets();
         String fileName = "";
-        try{
+        try {
             String[] assetFiles = assetManager.list("");
-            for (String filename : assetFiles){
-                if (filename.endsWith(".tflite")){
+            for (String filename : assetFiles) {
+                if (filename.endsWith(".tflite")) {
                     fileName = filename;
                 }
             }
-        }
-        catch(IOException e){
+        } catch (IOException e) {
             e.printStackTrace();
         }
         // Load TFLite model
@@ -347,7 +374,7 @@ public class MainActivity extends AppCompatActivity {
             String label = "unknown";
 
             if (confidence < 0.7f) continue;
-            if(classId >= 0 && classId < labels.size()){
+            if (classId >= 0 && classId < labels.size()) {
                 label = labels.get(classId);
             }
 
@@ -382,18 +409,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void analyzeImage(ImageProxy image) {
-        if(isInferenceRunning){
+        if (isInferenceRunning) {
             image.close();
             return;
         }
         frameCounter++;
-        if(frameCounter % INFERENCE_INTERVAL != 0){
+        if (frameCounter % INFERENCE_INTERVAL != 0) {
             image.close();
             return;
         }
         int rotationDegrees = image.getImageInfo().getRotationDegrees();
-        if(rotation != rotationDegrees){
-            rotation = (float)rotationDegrees;
+        if (rotation != rotationDegrees) {
+            rotation = (float) rotationDegrees;
         }
         isInferenceRunning = true;
         long startNs = System.nanoTime();
@@ -403,7 +430,7 @@ public class MainActivity extends AppCompatActivity {
 
         long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
         int targetMs = 200;
-        INFERENCE_INTERVAL = Math.max(1, (int)(targetMs / Math.max(elapsedMs, 1)));
+        INFERENCE_INTERVAL = Math.max(1, (int) (targetMs / Math.max(elapsedMs, 1)));
         runOnUiThread(() -> overlayView.setDetections(detections));
         image.close();
         isInferenceRunning = false;
@@ -433,11 +460,12 @@ public class MainActivity extends AppCompatActivity {
         inputAllocation = Allocation.createTyped(rs, yuvType.create(), Allocation.USAGE_SCRIPT);
         outputAllocation = Allocation.createTyped(rs, rgbaType.create(), Allocation.USAGE_SCRIPT);
     }
-    private void loadLabels(){
+
+    private void loadLabels() {
         labels = new ArrayList<>();
-        try(BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open("labels.txt")))){
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open("labels.txt")))) {
             String line;
-            while((line = reader.readLine()) != null){
+            while ((line = reader.readLine()) != null) {
                 labels.add(line.trim());
             }
         } catch (IOException e) {
@@ -445,11 +473,25 @@ public class MainActivity extends AppCompatActivity {
         }
         int labelAmount = labels.size();
         overlayView.setIDamount(labelAmount);
+        overlayView.setLabelsList(labels);
         Log.d("VuzixInput", "label amount: " + labelAmount);
     }
+
     @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event){
-        switch (keyCode){
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER &&
+                event.getAction() == KeyEvent.ACTION_DOWN) {
+            Log.d("VuzixInput", "DPAD_CENTER detected in dispatchKeyEvent");
+            overlayView.ShowInfo();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        int scrollamount = 100;
+        switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_RIGHT:
                 Log.d("VuzixInput", "right button pressed");
                 overlayView.setID(1);
@@ -459,26 +501,32 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("VuzixInput", "left button pressed");
                 overlayView.setID(-1);
                 return true;
-            case KeyEvent.KEYCODE_DPAD_CENTER:
-                Log.d("VuzixInput", "select button pressed");
-                //run method that shows part info
+            case KeyEvent.KEYCODE_DPAD_UP:
+                Log.d("VuzixInput", "up button pressed");
+                scrollInfoOverlay(-scrollamount);
                 return true;
-            default: return super.onKeyDown(keyCode, event);
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                Log.d("VuzixInput", "up button pressed");
+                scrollInfoOverlay(scrollamount);
+                return true;
+            default:
+                return super.onKeyDown(keyCode, event);
         }
     }
-    private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener{
+
+    private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener {
         private static final int SWIPE_THRESHOLD = 100;
         private static final int SWIPE_VELOCITY_THRESHOLD = 100;
 
         @Override
-        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY){
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
             float diffX = e2.getX() - e1.getX();
             float diffY = e2.getY() - e1.getY();
-            if(Math.abs(diffX) > Math.abs(diffY)){
-                if(Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD){
-                    if(diffX > 0){
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                    if (diffX > 0) {
                         onSwipeRight();
-                    } else{
+                    } else {
                         onSwipeLeft();
                     }
                     return true;
@@ -486,13 +534,55 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         }
+
+        @Override
+        public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
+            Log.d("VuzixInput", "Single tap");
+            overlayView.ShowInfo();
+            return true;
+        }
     }
-    private void onSwipeRight(){
+
+    private void onSwipeRight() {
         Log.d("VuxixInput", "Swiped right");
         overlayView.setID(1);
     }
-    private void onSwipeLeft(){
+
+    private void onSwipeLeft() {
         Log.d("VuzixInput", "Swiped left");
         overlayView.setID(-1);
+    }
+
+    private Map<Integer, Info> loadInfoFromAssets(Context context) {
+        Map<Integer, Info> infoMap = new HashMap<>();
+        try {
+            InputStream is = context.getAssets().open("instructions.json");
+            int size = is.available();
+            byte[] buffer = new byte[size];
+            is.read(buffer);
+            is.close();
+            String jsonString = new String(buffer, StandardCharsets.UTF_8);
+
+            JSONObject json = new JSONObject(jsonString);
+            Iterator<String> keys = json.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                JSONObject obj = json.getJSONObject(key);
+                String text = obj.optString("text", "");
+                String imageName = obj.optString("image", "");
+                int imageResId = imageName.isEmpty() ? -1 :
+                        context.getResources().getIdentifier(imageName.replace(".png", ""), "drawable", context.getPackageName());
+                infoMap.put(Integer.parseInt(key), new Info(text, imageResId));
+            }
+        } catch (IOException | JSONException e) {
+            e.printStackTrace();
+        }
+        return infoMap;
+    }
+
+    private void scrollInfoOverlay(int amount) {
+        if (infoScrollView != null) {
+            infoScrollView.smoothScrollBy(0, amount);
+        }
     }
 }

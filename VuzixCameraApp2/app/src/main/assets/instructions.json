@@ -1,0 +1,11 @@
+{
+  "-1": {"text":  "swipe left or right to choose specific parts", "image":  ""},
+  "0": {"text":  "1.Varmista, että koskettimet putoavat linjaalien loviin vaihteen molemmissa pääteasennoissa ja että linjaalien lovet ovat keskeisesti. Jos jompikumpi tai kumpikaan ei toteudu, siirry kohtaan 2.\n\n2.Tarkasta, onko Railex-kääntöavustimen kohdalla kiinni olevan kielen ja tukikiskon välissä rako (noin 2–3 mm) vai ei. Jos kielen ja tukikiskon välissä ei ole rakoa, käytä vaihteenkoskettimen säädössä 8 mm ja 9 mm tulkkeja. Jos kielen ja tukikiskon välissä on rako, käytä 11 mm ja 12 mm tulkkeja.\n\n3. Säätö aloitetaan vaihteenkoskettimen puolelta lyhyestä säätötangosta. Aseta 8/11 mm säätötulkki Railex-kääntöavustimen kohdalla kielen ja tukikiskon väliin. Käännä vaihteenkoskettimen puoleinen kieli kiinni. Säädä vaihteenkoskettimen lyhyttä säätötankoa sen kierretangosta, kunnes vaihde menee valvontaan. Tarkasta, että vaihde menee valvontaan myös toisessa pääteasennossa.\n\n4. Tarkasta, että vaihde ei mene kummassakaan pääteasennossa valvontaan, kun Railex-kääntöavustimen kohdalla kielen ja tukikiskon välissä 9/12 mm tulkki.\n\n5. Käännä vaihteenkoskettimen puoleinen kieli kiinni ilman tulkkia. Säädä linjaalia, jossa on lyhyt.\n\n6. Käännä vaihteenkoskettimen puoleinen kieli tukikiskoon kiinni ilman tulkkia. Säädä lyhyt lovi pitkän loven keskelle ja lukitse säätötangon kontramutteri.\n\n7. Aseta 8 mm tai 11 mm tulkki pitkän säätötangon puolelle (vaihteenkoskettimen vastakkaiselle puolelle) Railex-kääntöavustimen kohdalle. Säädä koskettimen säätökelkasta säätöarvot kohdalleen.\n\n8. Tarkasta 8 mm tai 11 mm tulkilla, että vaihde menee valvontaan molemmissa pääteasennoissa.\n\n9. Tarkasta 9 mm tai 12 mm tulkilla, että vaihde ei mene pääteasennoissaan valvontaan.", "image":  ""},
+  "1": {"text":  "", "image":  "kaantoavustin"},
+  "2": {"text":  "this is a chairs base.", "image":  ""},
+  "3": {"text":  "this is a chair's caster.", "image":  ""},
+  "4": {"text":  "this is a chair's cylinder.", "image":  ""},
+  "5": {"text":  "this is a chair's lever.", "image":  ""},
+  "6": {"text":  "this is a chair's mount.", "image":  ""},
+  "7": {"text":  "this is a chair's seat", "image":  ""}
+}

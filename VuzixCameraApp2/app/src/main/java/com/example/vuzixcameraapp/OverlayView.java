@@ -8,18 +8,40 @@ import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.camera.view.PreviewView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class OverlayView extends View{
     private final Paint boxPaint;
     private final Paint textPaint;
     private float rotation;
-    private int ID = 0;
+    private int ID = -1;
     private int IDamount = 8;
+    private Map<Integer, Info> infoMap;
+    private FrameLayout infoOverlay;
+    private TextView infoText;
+    private ImageView infoImage;
+    private TextView detection_status;
+    private List<String> labels;
+    public void setLabelsList(List<String> labels){
+        this.labels = labels;
+    }
+    public void setOverlay(FrameLayout infoOverlay, TextView infoText, ImageView infoImage, TextView detection_status){
+        this.infoOverlay = infoOverlay;
+        this.infoText = infoText;
+        this.infoImage = infoImage;
+        this.detection_status = detection_status;
+    }
+    public void setMap(Map<Integer, Info> infoMap){
+        this.infoMap = infoMap;
+    }
     public static class Detection{
         public RectF box;
         public String label;
@@ -61,9 +83,17 @@ public class OverlayView extends View{
     public void setID(int ID)
     {
         this.ID += ID;
-        if(this.ID > IDamount-1){this.ID = 0;}
-        if(this.ID < 0){this.ID = IDamount -1;}
+        if(this.ID > IDamount-1){this.ID = -1;}
+        if(this.ID < -1){this.ID = IDamount -1;}
         Log.d("VuzixInput", "current ID: " + this.ID);
+        Info info = infoMap.get(this.ID);
+        updateInfo(info);
+        if(this.ID != -1){
+            detection_status.setText("Currently detecting: " + labels.get(this.ID));
+        }
+        else{
+            detection_status.setText("Currently detecting everything");
+        }
     }
     public void setIDamount(int IDamount){this.IDamount = IDamount;}
     @Override
@@ -84,7 +114,7 @@ public class OverlayView extends View{
 
             //Log.e("MyApp", "trying to draw rectangle");
             for(Detection detection: detections){
-                if(ID != detection.ID){continue;}
+                if(ID != detection.ID && ID != -1){continue;}
                 float left = detection.box.left * scale + offsetX;
                 float top = detection.box.top * scale + offsetY;
                 float right = detection.box.right * scale + offsetX;
@@ -109,7 +139,7 @@ public class OverlayView extends View{
 
             //Log.e("MyApp", "trying to draw rectangle");
             for(Detection detection: detections){
-                if(ID != detection.ID){continue;}
+                if(ID != detection.ID && ID != -1){continue;}
                 float left = detection.box.left * scale + offsetX;
                 float top = detection.box.top * scale + offsetY;
                 float right = detection.box.right * scale + offsetX;
@@ -120,6 +150,43 @@ public class OverlayView extends View{
                 //Log.e("MyApp", "drawing rectangle");
             }
         }
-
+    }
+    public void ShowInfo(){
+            Info info = infoMap.get(ID);
+            showInfo(info);
+    }
+    private void showInfo(Info info){
+        Log.d("VuzixInput", "imageresid: " + info.imageResId);
+        if(infoOverlay.getVisibility() == View.GONE){
+            if(info != null){
+                infoText.setText(info.text);
+                if(info.imageResId != -1){
+                    infoImage.setImageResource(info.imageResId);
+                    infoImage.setVisibility(View.VISIBLE);
+                }else{
+                    infoImage.setVisibility(View.GONE);
+                }
+                infoOverlay.setVisibility(View.VISIBLE);
+            }else{
+                infoOverlay.setVisibility(View.GONE);
+            }
+        }
+        else{
+            infoOverlay.setVisibility(View.GONE);
+        }
+    }
+    private void updateInfo(Info info){
+        if(infoOverlay.getVisibility() == View.VISIBLE){
+            if(info != null){
+                infoText.setText(info.text);
+                if(info.imageResId != -1){
+                    infoImage.setImageResource(info.imageResId);
+                    infoImage.setVisibility(View.VISIBLE);
+                }
+                else{
+                    infoImage.setVisibility(View.GONE);
+                }
+            }
+        }
     }
 }
