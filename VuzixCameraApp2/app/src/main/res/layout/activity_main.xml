@@ -21,7 +21,7 @@
         android:id="@+id/detection_status"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Currently detecting everything"
+        android:text="Tällä hetkellä tunnistetaan kaikki"
         android:textColor="#FFFFFF"
         android:textSize="16sp"
         android:background="#88000000"

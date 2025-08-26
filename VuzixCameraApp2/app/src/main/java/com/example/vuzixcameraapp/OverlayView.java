@@ -89,10 +89,10 @@ public class OverlayView extends View{
         Info info = infoMap.get(this.ID);
         updateInfo(info);
         if(this.ID != -1){
-            detection_status.setText("Currently detecting: " + labels.get(this.ID));
+            detection_status.setText("Tällä hetkellä tunnistetaan: " + labels.get(this.ID));
         }
         else{
-            detection_status.setText("Currently detecting everything");
+            detection_status.setText("Tällä hetkellä tunnistetaan kaikki");
         }
     }
     public void setIDamount(int IDamount){this.IDamount = IDamount;}
