@@ -7,13 +7,11 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
-import android.gesture.Gesture;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.RectF;
-import android.icu.text.IDNA;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -24,7 +22,6 @@ import android.renderscript.ScriptIntrinsicYuvToRGB;
 import android.renderscript.Type;
 import android.util.Log;
 import android.view.GestureDetector;
-import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -73,12 +70,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity {
-
-    // Constants for permission and inference
     private static final int REQUEST_CODE_PERMISSIONS = 10;
     private static final String[] REQUIRED_PERMISSIONS = new String[]{Manifest.permission.CAMERA};
     private static int INFERENCE_INTERVAL = 5; // Run inference every 5 frames
-    // UI and processing fields
     private PreviewView previewView;
     private Interpreter tflite;
     private int screenWidth;
@@ -107,11 +101,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        gestureDetector = new GestureDetector(this, new SwipeGestureListener());
+        gestureDetector = new GestureDetector(this, new SwipeGestureListener()); //gesture detector for touch controls
+
+        //inputbuffer setup for camera bitmap processing
         int targetSize = 480;
         int numBytes = 4 * targetSize * targetSize * 3;
         inputBuffer = ByteBuffer.allocateDirect(numBytes).order(ByteOrder.nativeOrder());
+
         setContentView(R.layout.activity_main);
+
+        //setting AI analysis to a seperate thread
         analysisThread = new HandlerThread("AnalysisThread");
         analysisThread.start();
         analysisHandler = new Handler(analysisThread.getLooper());
@@ -125,8 +124,15 @@ public class MainActivity extends AppCompatActivity {
         infoImage = findViewById(R.id.info_image);
         infoScrollView = findViewById(R.id.info_scroll_view);
         detectionStatus = findViewById(R.id.detection_status);
+        previewView = findViewById(R.id.previewView);
+
+
+        //moving info to OverlayView
+        overlayView.setPreviewView(previewView);
         overlayView.setMap(loadInfoFromAssets(this));
         overlayView.setOverlay(infoOverlay, infoText, infoImage, detectionStatus);
+
+        //setting touch screen listeners for main view and infoscrollview
         mainView.setOnTouchListener((v, event) -> gestureDetector.onTouchEvent(event));
         mainView.setClickable(true);
         mainView.setFocusable(true);
@@ -148,9 +154,6 @@ public class MainActivity extends AppCompatActivity {
                 screenHeight = overlayView.getHeight();
             }
         });
-
-        previewView = findViewById(R.id.previewView);
-        overlayView.setPreviewView(previewView);
         // Get PreviewView size after layout
         previewView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -160,8 +163,6 @@ public class MainActivity extends AppCompatActivity {
                 int previewWidth = previewView.getWidth();
                 int previewHeight = previewView.getHeight();
 
-                // Store previewWidth and previewHeight somewhere accessible for scaling
-                // For example, in your activity fields:
                 MainActivity.this.previewWidth = previewWidth;
                 MainActivity.this.previewHeight = previewHeight;
             }
@@ -172,6 +173,8 @@ public class MainActivity extends AppCompatActivity {
         } else {
             ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
         }
+
+        // get the TFLite model from assets
         AssetManager assetManager = getAssets();
         String fileName = "";
         try {
@@ -184,7 +187,9 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        // Load TFLite model
+
+
+        // Load TFLite model along with optimizations
         try {
             MappedByteBuffer modelBuffer = loadModelFile(fileName);
             if (modelBuffer == null) {
@@ -239,6 +244,7 @@ public class MainActivity extends AppCompatActivity {
         }, ContextCompat.getMainExecutor(this));
     }
 
+    //converts camera feed into a bitmap to feed to the TFLite model
     private Bitmap toBitmap(ImageProxy image) {
         if (inputAllocation == null) {
             initRenderScript(image.getWidth(), image.getHeight());
@@ -261,6 +267,9 @@ public class MainActivity extends AppCompatActivity {
         yuvToRgbIntrinsic.forEach(outputAllocation);
         Bitmap bitmap = Bitmap.createBitmap(image.getWidth(), image.getHeight(), Bitmap.Config.ARGB_8888);
         outputAllocation.copyTo(bitmap);
+
+        //pass rotation to overlayView, rotate the bitmap using a matrix to keep it accurate
+        //with what the camera is showing
         overlayView.setRotation(rotation);
         Matrix matrix = new Matrix();
         matrix.postRotate(rotation);
@@ -306,26 +315,26 @@ public class MainActivity extends AppCompatActivity {
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
     }
 
-    // Preprocess bitmap to 640x640 with padding, normalization
+    // Preprocess bitmap to 480x480 with padding, normalization
     private PreprocessingResult preprocessBitmap(Bitmap originalBitmap) {
         int targetSize = 480;
         int originalWidth = originalBitmap.getWidth();
         int originalHeight = originalBitmap.getHeight();
 
+        //maintain aspect ratio
         float scaleX = (float) targetSize / originalWidth;
         float scaleY = (float) targetSize / originalHeight;
-        float scale = Math.min(scaleX, scaleY); // maintain aspect ratio
+        float scale = Math.min(scaleX, scaleY);
+
+        //padding to keep the image 480x480 to keep the TFLite model accurate
         int newWidth = Math.round(originalWidth * scale);
         int newHeight = Math.round(originalHeight * scale);
         float padX = (targetSize - newWidth) / 2f;
         float padY = (targetSize - newHeight) / 2f;
 
-        Bitmap scaled = Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true);
         Bitmap resized = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(resized);
-        canvas.drawColor(Color.BLACK);
-        canvas.drawBitmap(scaled, padX, padY, null);
 
+        
         inputBuffer.rewind();
         int[] pixels = new int[targetSize * targetSize];
         resized.getPixels(pixels, 0, targetSize, 0, 0, targetSize, targetSize);
@@ -337,6 +346,7 @@ public class MainActivity extends AppCompatActivity {
             inputBuffer.putFloat((pixel & 0xFF) / 255.0f);
         }
 
+        //set the results as a new PreprocessingResult instance
         PreprocessingResult result = new PreprocessingResult();
         result.inputBuffer = inputBuffer;
         result.scale = scale;
@@ -355,15 +365,23 @@ public class MainActivity extends AppCompatActivity {
         float scale = prep.scale;
         float padX = prep.padX;
         float padY = prep.padY;
+
+        //this needs to match the output of the used TFLite model, it should always be this
+        //with nms enabled during the model conversion
         float[][][] output = new float[1][300][6];
 
         if (tflite == null) {
             return new ArrayList<>();
         }
+
+        //run the model, returns results into the output array
         tflite.run(input, output);
 
         List<OverlayView.Detection> results = new ArrayList<>();
 
+        //loops through the output array. Doesn't need a nested loop because
+        //the 1st and 3rd dimensions are always the same, with the 3rd dimension
+        //being the bounding box coordinates, confidence and class id.
         for (int i = 0; i < 300; i++) {
             float x1 = output[0][i][0];
             float y1 = output[0][i][1];
@@ -373,32 +391,38 @@ public class MainActivity extends AppCompatActivity {
             int classId = (int) output[0][i][5];
             String label = "unknown";
 
+            //skips the loop if confidence is below 0.7
             if (confidence < 0.7f) continue;
+
+            //gets label based on class id
             if (classId >= 0 && classId < labels.size()) {
                 label = labels.get(classId);
             }
 
-            // Scale to model's 640×640 padded input
+            // Scale to model's 480×480 padded input
             x1 *= 480;
             x2 *= 480;
             y1 *= 480;
             y2 *= 480;
-// Undo the letterboxing pad
+            // Undo the letterboxing pad
             x1 -= padX;
             x2 -= padX;
             y1 -= padY;
             y2 -= padY;
 
-// Scale back to original image
+            // Scale back to original image
             x1 /= scale;
             x2 /= scale;
             y1 /= scale;
             y2 /= scale;
 
+            //clamps to screen bounds
             x1 = clamp(x1, 0, originalWidth);
             x2 = clamp(x2, 0, originalWidth);
             y1 = clamp(y1, 0, originalHeight);
             y2 = clamp(y2, 0, originalHeight);
+
+            //skips if bounding box is off screen
             if (x2 <= x1 || y2 <= y1) {
                 continue;
             }
@@ -408,20 +432,32 @@ public class MainActivity extends AppCompatActivity {
         return results;
     }
 
+    //image analysis is here so that it can be run on a separate thread
     private void analyzeImage(ImageProxy image) {
+
+        //doesn't analyze if inference is happening, to improve performance
         if (isInferenceRunning) {
             image.close();
             return;
         }
+
+        //skips image analysis every X frames, determined by INFERENCE_INTERVAL
+        //to improve performance
         frameCounter++;
         if (frameCounter % INFERENCE_INTERVAL != 0) {
             image.close();
             return;
         }
+
+        //gets rotation from camera to apply it correctly during bitmap conversion
         int rotationDegrees = image.getImageInfo().getRotationDegrees();
         if (rotation != rotationDegrees) {
             rotation = (float) rotationDegrees;
         }
+
+        //tracks time taken to run inference, converts camera feed to bitmap,
+        //runs inference, dynamically adjusts INFERENCE_INTERVAL to slow down
+        //inference if needed for performance.
         isInferenceRunning = true;
         long startNs = System.nanoTime();
         Bitmap bitmap = toBitmap(image);
@@ -436,6 +472,7 @@ public class MainActivity extends AppCompatActivity {
         isInferenceRunning = false;
     }
 
+    //destroys analysisthread onDestroy
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -450,6 +487,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
     private void initRenderScript(int width, int height) {
         rs = RenderScript.create(this);
         yuvToRgbIntrinsic = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs));
@@ -461,6 +499,7 @@ public class MainActivity extends AppCompatActivity {
         outputAllocation = Allocation.createTyped(rs, rgbaType.create(), Allocation.USAGE_SCRIPT);
     }
 
+    //loads labels from a text file in assets and passes them and the amount of labels to overlayView
     private void loadLabels() {
         labels = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open("labels.txt")))) {
@@ -474,39 +513,40 @@ public class MainActivity extends AppCompatActivity {
         int labelAmount = labels.size();
         overlayView.setIDamount(labelAmount);
         overlayView.setLabelsList(labels);
-        Log.d("VuzixInput", "label amount: " + labelAmount);
     }
 
+    //catches the KEYCODE_DPAD_CENTER action and shows info overlay, needed for the Vuzix M4000 AR glasses
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER &&
                 event.getAction() == KeyEvent.ACTION_DOWN) {
-            Log.d("VuzixInput", "DPAD_CENTER detected in dispatchKeyEvent");
             overlayView.ShowInfo();
             return true;
         }
         return super.dispatchKeyEvent(event);
     }
 
+    //catches the Vuzix M4000 AR glasses' inputs and processes them accordingly
+
+    //Left and Right changes the ID in overlayView by 1 or -1 to only show
+    //the equivalent class ID from the TFLite models output
+
+    //Up and Down scrolls the info overlay up or down by a certain amount
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         int scrollamount = 100;
         switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_RIGHT:
-                Log.d("VuzixInput", "right button pressed");
                 overlayView.setID(1);
                 return true;
 
             case KeyEvent.KEYCODE_DPAD_LEFT:
-                Log.d("VuzixInput", "left button pressed");
                 overlayView.setID(-1);
                 return true;
             case KeyEvent.KEYCODE_DPAD_UP:
-                Log.d("VuzixInput", "up button pressed");
                 scrollInfoOverlay(-scrollamount);
                 return true;
             case KeyEvent.KEYCODE_DPAD_DOWN:
-                Log.d("VuzixInput", "up button pressed");
                 scrollInfoOverlay(scrollamount);
                 return true;
             default:
@@ -514,6 +554,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //detects swipes and taps on mobile devices. swipes change the ID in overlayView by 1 or -1
+    //to only show the equivalent class ID from the TFLite models output
+    //taps show the info overlay
     private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener {
         private static final int SWIPE_THRESHOLD = 100;
         private static final int SWIPE_VELOCITY_THRESHOLD = 100;
@@ -525,9 +568,9 @@ public class MainActivity extends AppCompatActivity {
             if (Math.abs(diffX) > Math.abs(diffY)) {
                 if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
                     if (diffX > 0) {
-                        onSwipeRight();
+                        overlayView.setID(1);
                     } else {
-                        onSwipeLeft();
+                        overlayView.setID(-1);
                     }
                     return true;
                 }
@@ -537,22 +580,12 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
-            Log.d("VuzixInput", "Single tap");
             overlayView.ShowInfo();
             return true;
         }
     }
 
-    private void onSwipeRight() {
-        Log.d("VuxixInput", "Swiped right");
-        overlayView.setID(1);
-    }
-
-    private void onSwipeLeft() {
-        Log.d("VuzixInput", "Swiped left");
-        overlayView.setID(-1);
-    }
-
+    //loads the information to show in info overlay from assets into a HashMap
     private Map<Integer, Info> loadInfoFromAssets(Context context) {
         Map<Integer, Info> infoMap = new HashMap<>();
         try {
@@ -580,6 +613,7 @@ public class MainActivity extends AppCompatActivity {
         return infoMap;
     }
 
+    //scrolls the scrollable info overlay
     private void scrollInfoOverlay(int amount) {
         if (infoScrollView != null) {
             infoScrollView.smoothScrollBy(0, amount);

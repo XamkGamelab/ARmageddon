@@ -30,18 +30,24 @@ public class OverlayView extends View{
     private ImageView infoImage;
     private TextView detection_status;
     private List<String> labels;
+
+    //receives labels from MainActivity
     public void setLabelsList(List<String> labels){
         this.labels = labels;
     }
+
+    //sets overlay based on info from MainActivity
     public void setOverlay(FrameLayout infoOverlay, TextView infoText, ImageView infoImage, TextView detection_status){
         this.infoOverlay = infoOverlay;
         this.infoText = infoText;
         this.infoImage = infoImage;
         this.detection_status = detection_status;
     }
+    //receives infoMap from MainActivity
     public void setMap(Map<Integer, Info> infoMap){
         this.infoMap = infoMap;
     }
+    //detection class
     public static class Detection{
         public RectF box;
         public String label;
@@ -56,6 +62,7 @@ public class OverlayView extends View{
         }
     }
     private PreviewView previewView;
+    //receives PreviewView from MainActivity
     public void setPreviewView(PreviewView previewView){
         this.previewView = previewView;
     }
@@ -73,13 +80,17 @@ public class OverlayView extends View{
         textPaint.setTextSize(40f);
         textPaint.setStyle(Paint.Style.FILL);
     }
+    //receives detections from MainActivity
     public void setDetections(List<Detection> detections){
         this.detections = detections;
         postInvalidate();
     }
+    //Receives rotation from MainActivity
     public void setRotation(float rotation){
         this.rotation = rotation;
     }
+    //Changes ID based on MainActivity inputs, also updates the shown info
+    //and currently detected object based on the received infoMap and current ID
     public void setID(int ID)
     {
         this.ID += ID;
@@ -95,7 +106,11 @@ public class OverlayView extends View{
             detection_status.setText("Tällä hetkellä tunnistetaan kaikki");
         }
     }
+    //receives max ID amount
     public void setIDamount(int IDamount){this.IDamount = IDamount;}
+
+    //Draws bounding boxes based on received rotation. this only works on portrait
+    //mobile devices and the Vuzix M4000 device. this system can and should be improved
     @Override
     protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
@@ -103,7 +118,9 @@ public class OverlayView extends View{
         if(rotation == 180){
             int viewWidth = previewView.getWidth();
             int viewHeight = previewView.getHeight();
-            Log.d("Debug", "View size: " + viewWidth + "X" + viewHeight);
+
+            //this width and height are incorrect, but they only serve to
+            //keep the aspect ratio correct, hence why they work
             float imageWidth = 640f;
             float imageHeight = 480f;
             float scaleX = viewWidth / imageWidth;
@@ -112,7 +129,10 @@ public class OverlayView extends View{
             float offsetX = (viewWidth - imageWidth * scale) / 2f;
             float offsetY = (viewHeight - imageHeight * scale) /2f;
 
-            //Log.e("MyApp", "trying to draw rectangle");
+            //draws a bounding box for all detections in the detection list
+            //based on the calculations above. It only draws the bounding box
+            //for a detection with the same ID as what is wanted to be shown.
+            //it also says the label and confidence below the box
             for(Detection detection: detections){
                 if(ID != detection.ID && ID != -1){continue;}
                 float left = detection.box.left * scale + offsetX;
@@ -122,13 +142,14 @@ public class OverlayView extends View{
                 canvas.drawRect(left, top, right, bottom, boxPaint);
                 canvas.drawText(detection.label + " " + String.format("%.2f", detection.confidence),
                         left, top - 10, textPaint);
-                //Log.e("MyApp", "drawing rectangle");
             }
         }
         if(rotation == 90){
             int viewWidth = previewView.getWidth();
             int viewHeight = previewView.getHeight();
-            Log.d("Debug", "View size: " + viewWidth + "X" + viewHeight);
+
+            //this width and height are incorrect, but they only serve to
+            //keep the aspect ratio correct, hence why they work
             float imageWidth = 480f;
             float imageHeight = 640f;
             float scaleX = viewWidth / imageWidth;
@@ -137,7 +158,10 @@ public class OverlayView extends View{
             float offsetX = (viewWidth - imageWidth * scale) / 2f;
             float offsetY = (viewHeight - imageHeight * scale) /2f;
 
-            //Log.e("MyApp", "trying to draw rectangle");
+            //draws a bounding box for all detections in the detection list
+            //based on the calculations above. It only draws the bounding box
+            //for a detection with the same ID as what is wanted to be shown.
+            //it also says the label and confidence below the box
             for(Detection detection: detections){
                 if(ID != detection.ID && ID != -1){continue;}
                 float left = detection.box.left * scale + offsetX;
@@ -147,25 +171,27 @@ public class OverlayView extends View{
                 canvas.drawRect(left, top, right, bottom, boxPaint);
                 canvas.drawText(detection.label + " " + String.format("%.2f", detection.confidence),
                         left, top - 10, textPaint);
-                //Log.e("MyApp", "drawing rectangle");
             }
         }
     }
+
+    //gets the info from the passed ID and infomap
     public void ShowInfo(){
             Info info = infoMap.get(ID);
             showInfo(info);
     }
+
+    //shows or hides the info overlay with the given info
     private void showInfo(Info info){
-        Log.d("VuzixInput", "imageresid: " + info.imageResId);
         if(infoOverlay.getVisibility() == View.GONE){
             if(info != null){
-                infoText.setText(info.text);
                 if(info.imageResId != -1){
                     infoImage.setImageResource(info.imageResId);
                     infoImage.setVisibility(View.VISIBLE);
                 }else{
                     infoImage.setVisibility(View.GONE);
                 }
+                infoText.setText(info.text);
                 infoOverlay.setVisibility(View.VISIBLE);
             }else{
                 infoOverlay.setVisibility(View.GONE);
@@ -175,6 +201,8 @@ public class OverlayView extends View{
             infoOverlay.setVisibility(View.GONE);
         }
     }
+
+    //updates the content of the info overlay based on the given info
     private void updateInfo(Info info){
         if(infoOverlay.getVisibility() == View.VISIBLE){
             if(info != null){
