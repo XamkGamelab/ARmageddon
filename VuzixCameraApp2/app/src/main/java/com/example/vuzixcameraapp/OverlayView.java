@@ -115,7 +115,7 @@ public class OverlayView extends View{
     protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
 
-        if(rotation == 180){
+        if(rotation == 180 || rotation == 0 || rotation == -180){
             int viewWidth = previewView.getWidth();
             int viewHeight = previewView.getHeight();
 
@@ -144,7 +144,7 @@ public class OverlayView extends View{
                         left, top - 10, textPaint);
             }
         }
-        if(rotation == 90){
+        if(rotation == 90 || rotation == 270 || rotation == -90 || rotation == -270){
             int viewWidth = previewView.getWidth();
             int viewHeight = previewView.getHeight();
 

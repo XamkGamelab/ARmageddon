@@ -4,9 +4,11 @@ import static java.lang.Math.clamp;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -109,6 +111,8 @@ public class MainActivity extends AppCompatActivity {
         inputBuffer = ByteBuffer.allocateDirect(numBytes).order(ByteOrder.nativeOrder());
 
         setContentView(R.layout.activity_main);
+
+        lockCurrentOrientation();
 
         //setting AI analysis to a seperate thread
         analysisThread = new HandlerThread("AnalysisThread");
@@ -332,9 +336,13 @@ public class MainActivity extends AppCompatActivity {
         float padX = (targetSize - newWidth) / 2f;
         float padY = (targetSize - newHeight) / 2f;
 
+        Bitmap scaled = Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true);
         Bitmap resized = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888);
 
-        
+        Canvas canvas = new Canvas(resized);
+        canvas.drawColor(Color.BLACK);
+        canvas.drawBitmap(scaled, padX, padY, null);
+
         inputBuffer.rewind();
         int[] pixels = new int[targetSize * targetSize];
         resized.getPixels(pixels, 0, targetSize, 0, 0, targetSize, targetSize);
@@ -617,6 +625,17 @@ public class MainActivity extends AppCompatActivity {
     private void scrollInfoOverlay(int amount) {
         if (infoScrollView != null) {
             infoScrollView.smoothScrollBy(0, amount);
+        }
+    }
+
+    //locks the orientation to prevent crashes after auto-rotate
+    private void lockCurrentOrientation() {
+        int orientation = getResources().getConfiguration().orientation;
+
+        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        } else if (orientation == Configuration.ORIENTATION_PORTRAIT) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         }
     }
 }
