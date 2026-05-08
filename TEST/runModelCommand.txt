@@ -1,1 +1,3 @@
 python yolo_detect.py --model fold5best.pt --source portvid.mp4 --resolution 480x480 --thresh=0.69 --record
+
+python yolo_detect.py --model best.pt --source switch6.mp4 --resolution 480x480 --thresh=0.6 --record

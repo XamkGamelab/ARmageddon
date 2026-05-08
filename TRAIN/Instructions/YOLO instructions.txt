@@ -1,0 +1,115 @@
+CONDA
+
+conda activate yolo
+
+cd [dirnamehere]
+
+
+TO TRAIN
+
+you need a data structure like in the image below: (yoloinstr1 and 2)
+
+Download automatic splitter script:
+`curl --output train_val_split.py https://raw.githubusercontent.com/EdjeElectronics/Train-and-Deploy-YOLO-Models/refs/heads/main/utils/train_val_split.py`
+
+Put the script into the folder you wish to create the data folder into.
+Then in Anaconda prompt move to that folder using `cd`
+ 
+Change the "path\\to\\data" to match the path to your dataset folder. (It is the folder that contains the "images" and "labels" folders)
+
+Now, Run the script. 
+
+(you can change the --train_pct parameter at the end. It determines the portion of images that are used for training, and the rest is for validation. (values between 0 and 1 ofc))
+
+`python train_val_split.py --datapath="C:\\path\\to\\data" --train_pct=.8`
+
+After running this, ensure your data structure matches the image. The folder has to be named data
+
+Create a training configuration file: (data.yaml)
+
+open text editor and make a file similar to the one below:
+
+path: C:\Users\sami.karkkainen\YOLO\data
+train: train/images
+val: validation/images
+nc: 8
+names: ["3.5mm_audio", "DisplayPort", "Ethernet", "HDMI", "IEC-Power", "Micro-USB", "USB", "USB-C"]
+
+Where 
+path = path to your data folder
+nc: [number of classes]
+list all classes as above
+MAKE SURE THE CLASSES ARE IN ALPHABETICAL ORDER
+(copy from classes.txt in the original dataset folder)
+
+Save it as data.yaml
+and put it in the same folder as the data folder (not inside, but on the same level)
+
+
+
+
+-----
+
+
+
+TRAIN MODEL:
+
+You should have the model downloaded and located in the same root folder as data and data.yaml (see download link below) You can also use a previously trained model to fine tune it.
+
+Or alternatively, if you just type the name of one of the officials, like yolo11s.pt here, it will automatically download it from GitHub
+
+we'll use YOLO11s here
+
+`yolo detect train data=data.yaml model=yolo11s.pt epochs=60 imgsz=640`
+
+this would train on yolo11s model for 60 epochs at 640x640 resolution with no additional parameters
+
+Additional parameters can include augmentations. You can add these into the command in any order
+
+
+hsv_h=0.3
+hsv_s=0.6
+hsv_v=0.5
+(these are hue, saturation and brightness, with example values (h=0.3 is quite aggressive btw))
+
+scale=0.3
+(randomizes scale between 70% and 130%)
+
+perspective=0.001
+degrees=180
+
+so an example command would be:
+`yolo detect train data=data.yaml model=yolo11s.pt epochs=200 imgsz=640 hsv_h=0.3 hsv_s=0.6 hsv_v=0.5 scale=0.3 perspective=0.001 degrees=180`
+
+for a full list see: https://docs.ultralytics.com/guides/yolo-data-augmentation/
+
+-----------
+
+
+
+MIKAEL ADDED:
+
+
+IF YOU RUN INTO PROBLEMS:
+(in your environment) uninstall pytorch:
+`pip uninstall -y torch torchvision torchaudio`  or (depending if you used pip or conda to install it)
+`conda uninstall -y pytorch torchvision torchaudio`
+
+purge Conda's cache to  force fresh fetches:
+`conda clean --all --yes`
+
+(re)install pytorch (with the environment active)
+`conda install -y pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia`
+
+---
+
+For video recording:
+Open your environment, go to the correct folder.
+`python yolo_detect.py --model fold5best.pt --source portvid.mp4 --resolution 480x480 --thresh=0.69 --record`
+Change the model name to match the one you want to use. 
+Change source name to match your video name.
+If you want to use webcam, `usb0` should be the correct one.
+Resolution is suggested to be `480x480` or `640x640`
+Threshold is the lowest confidence score the model will show, for example `--thresh=0.69` will only show all detected objects with 69% or higher confidence
+Remove `--record` if you dont want to record your video
+
